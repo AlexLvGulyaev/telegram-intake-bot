@@ -1,0 +1,7 @@
+aiogram>=3.7.0
+httpx>=0.27.0
+pydantic>=2.7.0
+pydantic-settings>=2.2.1
+
+# PostgreSQL session persistence (required when SESSION_STORAGE_TYPE=postgres)
+asyncpg>=0.29.0

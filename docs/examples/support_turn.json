@@ -1,0 +1,21 @@
+{
+  "reply": "Спасибо! Всё собрано. Сейчас передаю заявку специалисту.",
+  "extracted_ticket": {
+    "name": "Александр",
+    "contact": "+79991234567",
+    "problem_summary": "Не включается ноутбук после обновления",
+    "occurred_at": "сегодня утром",
+    "location": "ноутбук",
+    "priority": "срочно"
+  },
+  "extracted_lead": {
+    "name": null,
+    "contact": null,
+    "company": null,
+    "service_interest": null,
+    "budget_range": null,
+    "timeframe": null,
+    "status": null
+  },
+  "ready_to_submit": true
+}

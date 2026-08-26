@@ -1,0 +1,21 @@
+{
+  "reply": "Спасибо! Всё собрано. Сейчас передаю заявку менеджеру.",
+  "extracted_ticket": {
+    "name": null,
+    "contact": null,
+    "problem_summary": null,
+    "occurred_at": null,
+    "location": null,
+    "priority": null
+  },
+  "extracted_lead": {
+    "name": "Алексей",
+    "contact": "@alexei_sales",
+    "company": "ООО Ромашка",
+    "service_interest": "Автоматизация продаж через Telegram-бота",
+    "budget_range": "100–200 тыс. руб.",
+    "timeframe": "В течение недели",
+    "status": "теплый"
+  },
+  "ready_to_submit": true
+}
