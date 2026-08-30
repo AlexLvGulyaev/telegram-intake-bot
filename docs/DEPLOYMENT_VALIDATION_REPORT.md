@@ -1,104 +1,92 @@
 # ✅ Telegram Intake Bot · Deployment Validation Report
 
 **Проект:** telegram-intake-bot  
-**Дата:** 2026-08-22  
-**Статус:** PASS (с ограничением по окружению)
+**Дата:** 2026-08-30  
+**Статус:** PASS (чистое окружение)
+
+**Предыдущий прогон:** 2026-08-22 — PASS с ограничением по окружению (тот же VPS, компромисс). Настоящий отчёт заменяет его по итогам валидации в полностью чистом окружении.
 
 ---
 
 ## 🎯 1. Назначение
 
-Подтвердить, что Telegram Intake Bot может быть развёрнут и приведён в работоспособное состояние по инструкциям `docs/DEPLOYMENT_GUIDE.md` без использования знаний автора, не входящих в публичный репозиторий.
+Подтвердить, что Telegram Intake Bot может быть развёрнут и приведён в работоспособное состояние по инструкциям `docs/DEPLOYMENT_GUIDE.md` **с нуля, без использования знаний автора**, не входящих в публичный репозиторий.
 
-## ⚠️ 2. Ограничение окружения
+## 🧱 2. Чистое окружение
 
-Идеальная Deployment Validation по правилам APL требует чистого окружения (новый VPS, новая VM или новый Docker Host). В рамках данной проверки новый VPS был недоступен.
+| Аспект | Значение |
+|--------|----------|
+| Docker Host | Изолированный `docker:29.7.2-dind` (privileged), daemon свежий, кеши образов недоступны |
+| Материал | Только свежий `git clone` публичного репозитория (`github.com/AlexLvGulyaev/telegram-intake-bot`, HEAD `e279dd5`) + публичный `DEPLOYMENT_GUIDE.md` |
+| Изоляция от прод | Отдельный Docker-хост внутри dind — общий только физический сервер; прод-контейнер `telegram-support-bot` (`@PEcb06_bot`) не останавливался и не изменялся |
+| Telegram-изоляция | Отдельный тест-бот `@PEcb06TEST_bot`, отдельная группа операторов `PEcb06 tickets` |
+| Секреты | Перенесены в окружение программно (файл 0600), значения нигде не выводились; файл уничтожен после teardown |
 
-**Применённый компромисс:**
-
-- Проверка выполнена на том же физическом сервере, где работает production-инстанс `@PEcb06_bot`.
-- Для изоляции использовались:
-  - отдельный Telegram-бот `@PEcb06TEST_bot`;
-  - отдельный Docker-контейнер `telegram-intake-bot-dv`;
-  - отдельная Postgres-база `tib_test_db`;
-  - отдельная группа операторов `PEcb06 tickets` (`OPERATOR_CHAT_ID=-5446667984`).
-
-Это не полноценная «с нуля на новом VPS» Validation, но подтверждает воспроизводимость процесса развёртывания по `DEPLOYMENT_GUIDE.md` в рамках доступных ресурсов.
+Это соответствует требованию APL: Validation выполняется только в чистом окружении (новый VPS / VM / Docker Host). Некомпромиссный прогон.
 
 ---
 
-## 🛠️ 3. Подготовка окружения
+## ✅ 3. Результаты проверки
 
-### 3.1. Взятый из репозитория артефакт
-
-```bash
-git clone https://github.com/AlexLvGulyaev/telegram-intake-bot.git /tmp/tib-dv
-cd /tmp/tib-dv
-```
-
-### 3.2. Переменные окружения
-
-Создан `.env.test`:
-
-```env
-TELEGRAM_BOT_TOKEN=YOUR_TEST_BOT_TOKEN
-OPERATOR_CHAT_ID=-5446667984
-OPENAI_API_KEY=***
-OPENAI_MODEL=gpt-4o-mini
-OPENAI_BASE_URL=https://api.openai.com/v1
-LOG_LEVEL=DEBUG
-```
-
-### 3.3. Подготовка PostgreSQL (для фазы postgres)
-
-```bash
-# Создана изолированная тестовая база и пользователь
-docker exec meeting-audit-bot-db psql -U meeting_audit -c "CREATE DATABASE tib_test_db;"
-docker exec meeting-audit-bot-db psql -U meeting_audit -c "CREATE USER tib_test_user WITH PASSWORD 'tib_test_password'; GRANT ALL PRIVILEGES ON DATABASE tib_test_db TO tib_test_user; ALTER DATABASE tib_test_db OWNER TO tib_test_user;"
-docker cp /tmp/tib-dv/docs/schema.sql meeting-audit-bot-db:/tmp/schema.sql
-docker exec meeting-audit-bot-db psql -U tib_test_user -d tib_test_db -f /tmp/schema.sql
-```
+| Шаг | Действие | Ожидаемый результат | Фактический результат | Статус |
+|-----|----------|----------------------|------------------------|--------|
+| 1 | Клон публичного репозитория в чистое окружение | Рабочая копия по документации | Клон `e279dd5`, структура и `.env.example` на месте | PASS |
+| 2 | §7.4: `cp .env.example .env`, заполнение переменных | `.env` с реальными значениями изолированных целей | 6 ключей, тест-бот `@PEcb06TEST_bot` (verified getMe), `SESSION_STORAGE_TYPE=memory` | PASS |
+| 3 | §7.5: `docker build -t telegram-intake-bot .` | Образ собирается без ошибок | Сборка успешна, зависимости (включая `asyncpg`) установлены | PASS |
+| 4 | §7.5: `docker run -d --name telegram-intake-bot --env-file .env --restart unless-stopped telegram-intake-bot` | Контейнер запущен, бот начал polling | См. Defect 1 — первый запуск упал | → FAIL → фикс → PASS |
+| 5 | §7.6: логи запуска | `Start polling for bot @PEcb06TEST_bot` | `Run polling for bot @PEcb06TEST_bot`, storage=memory, 2+ минуты uptime без ошибок | PASS |
+| 6 | Проверка образа на «запекание» `.env` | `.env` отсутствует в слоях образа | `ls /app/.env` → отсутствует после фикса | PASS |
+| 7 | Интеграционные тесты репозитория (`pytest tests/`) | Все тесты зелёные | **12 passed** | PASS |
+| 8 | Backend E2E smoke (`scripts/e2e_smoke.py`, документированная строка запуска) | Оба сценария собирают поля, real-LLM, real Telegram outbound | `=== E2E SMOKE PASSED ===` (support + sales, заявки доставлены в группу операторов) | PASS |
 
 ---
 
-## ✅ 4. Результаты проверки
+## 🐞 4. Дефекты, найденные валидацией (и исправленные)
 
-### 4.1. Фаза 1 · Сессии в памяти (`SESSION_STORAGE_TYPE=memory`)
+Валидация по правилам APL — это проверка запуском; все найденные дефекты исправлены и пере-проверены запуском.
 
-| Шаг | Действие | Ожидаемый результат | Фактический результат | Статус |
-|-----|----------|----------------------|------------------------|--------|
-| 1 | `docker build -t telegram-intake-bot:dv .` | Образ собирается без ошибок | `Successfully built` | PASS |
-| 2 | `docker run -d --name telegram-intake-bot-dv --env-file .env.test telegram-intake-bot:dv` | Контейнер запущен, бот начал polling | `Run polling for bot @PEcb06TEST_bot` | PASS |
-| 3 | Backend E2E smoke (`scripts/e2e_smoke.py`) | Оба сценария собирают поля и отправляют заявки | `=== E2E SMOKE PASSED ===` | PASS |
+### Defect 1 · Секреты запекались в образ; бот не стартует при защищённом `.env` (критично)
 
-### 4.2. Фаза 2 · PostgreSQL-сессии (`SESSION_STORAGE_TYPE=postgres`)
+**Симптом:** первый `docker run` упал с `PermissionError: [Errno 13] Permission denied: '.env'`, контейнер перезапускался в цикле.
 
-| Шаг | Действие | Ожидаемый результат | Фактический результат | Статус |
-|-----|----------|----------------------|------------------------|--------|
-| 1 | Создание `tib_test_db` и применение `docs/schema.sql` | Таблица `tib_sessions` создана | `CREATE TABLE`, `CREATE INDEX` | PASS |
-| 2 | Перезапуск контейнера с `DATABASE_URL=postgresql://tib_test_user:tib_test_password@meeting-audit-bot-db:5432/tib_test_db` | Контейнер подключается к Postgres и polling работает | `Starting support intake bot (session_storage=postgres)` | PASS |
-| 3 | Backend E2E smoke | Сценарии проходят, сессии сохраняются | `=== E2E SMOKE PASSED ===` | PASS |
-| 4 | Проверка данных в `tib_sessions` | Записи о сессиях присутствуют | 2 rows, обе `submitted=true` | PASS |
-| 5 | Перезапуск контейнера и повторная проверка | Сессии сохранились | `session_count = 2` | PASS |
+**Root cause:** в репозитории отсутствовал `.dockerignore`, поэтому `COPY . .` в Dockerfile копировал `.env` внутрь образа (root:root, права как в рабочей копии). Контейнер работает под `appuser`:
+- с правами 600 (корректная защита секрета) — файл нечитаем, бот не стартует;
+- с правами 644 — «работает», но секреты попадают в слои образа.
+
+Ранние прогоны (22.08, production) проходили именно из-за прав 644 — дефект был латентным.
+
+**Фикс:** добавлен `.dockerignore` (`.env`, `.git/`, `.venv/`, `__pycache__/`, `docs/`, `task_history/`, `tests/` и т. п.). Пересборка + запуск повторены в чистом окружении: бот стартовал, `ls /app/.env` в образе подтверждает отсутствие секрета. Рабочая копия и гайд не потребовали изменений порядка шагов — `cp .env` → `build` → `run` остаётся корректным.
+
+### Defect 2 · Устаревшая инструкция §7.4 (документация)
+
+**Симптом:** гайд требовал «раскомментировать в requirements.txt» `asyncpg` для режима PostgreSQL — но `asyncpg` уже входит в базовые зависимости, сборка без правки requirements успешна.
+
+**Фикс:** §7.4 переписан — блок переменных без псвевдо-команды + явное указание, что пересборка не требуется.
+
+### Defect 3 · Строка запуска `e2e_smoke.py` из документации не работает
+
+**Симптом:** `python scripts/e2e_smoke.py` из корня кейса (как в документации) падал `ModuleNotFoundError: No module named 'core'` — в `sys.path` отсутствовал корень репозитория.
+
+**Фикс:** скрипт сам добавляет корень репозитория в `sys.path`; документированная строка запуска теперь работает как написано. Поверено чистым запуском.
 
 ---
 
 ## 🔍 5. Замечания
 
-- Backend E2E smoke (`scripts/e2e_smoke.py`) напрямую вызывает `SupportWorkflowService`, а не проходит через Telegram polling-обработчики. Это подтверждает бизнес-логику и путь отправки уведомлений, но не валидирует именно Telegram long-polling path.
-- Ручной Telegram E2E-прогон через `@PEcb06TEST_bot` не был выполнён в этой сессии.
-- В обоих прогонах сценарий сбора лида дважды задал вопрос о бюджете — это особенность текущего guard-поведения, не влияющая на результат.
+- В этом прогоне проверена фаза `memory` (дефолт гайда). Фаза `postgres` была валидирована в предыдущем прогоне (22.08) и коде репозитория не менялась.
+- Backend E2E smoke вызывает `SupportWorkflowService` напрямую — валидирует LLM-контур и реальный путь Telegram outbound; человеческий диалог через polling-клиента остаётся ручной проверкой владельца.
+- Уведомления обоих сценариев доставлены в изолированную группу операторов (real Bot API, тест-бот).
+- После валидации окружение полностью разобрано (контейнер бота, dind-хост), временные файлы с секретами уничтожены.
 
 ---
 
 ## 📚 6. Связанные документы
 
-- [🚀 `docs/DEPLOYMENT_GUIDE.md`](DEPLOYMENT_GUIDE.md) — инструкция по развёртыванию.
-- [🧪 `docs/TESTING.md`](TESTING.md) — результаты E2E-прогонов.
+- [🚀 `docs/DEPLOYMENT_GUIDE.md`](DEPLOYMENT_GUIDE.md) — инструкция по развёртыванию (актуализирована по итогам валидации).
 - [📊 `docs/PROJECT_STATE.md`](PROJECT_STATE.md) — паспорт состояния проекта.
 
 ---
 
 ## ✅ 7. Итог
 
-Telegram Intake Bot успешно развёрнут в изолированном тестовом окружении на существующем VPS в режимах `memory` и `postgres`. Все проверенные шаги `DEPLOYMENT_GUIDE.md` выполнены успешно. Проект готов к публикации как портфельный актив с учётом зафиксированного ограничения по окружению Validation.
+Telegram Intake Bot развёрнут с нуля в чистом окружении (изолированный Docker Host, только публичный репозиторий и публичный гайд) в дефолтной конфигурации `memory`. Полный цикл — клон → `.env` → сборка → запуск → polling тест-бота → 12/12 тестов → backend E2E (real LLM + real Telegram outbound) — прошёл без использования знаний автора вне публичной документации. Найденные валидацией дефекты (`.dockerignore`/секреты в образе, устаревшая инструкция, строка запуска smoke-скрипта) исправлены и пере-проверены запуском. Ограничение по окружению снято.

@@ -142,12 +142,11 @@ nano .env
 Для PostgreSQL персистентности:
 
 ```bash
-# раскомментировать в requirements.txt и пересобрать образ
-# asyncpg>=0.30.0
-
 SESSION_STORAGE_TYPE=postgres
 DATABASE_URL=postgresql://tib_user:tib_password@your-db-host:5432/tib_db
 ```
+
+Пересобрать образ не требуется — `asyncpg` уже входит в базовые зависимости (`requirements.txt`).
 
 Создать пользователя, базу и таблицу (пример для уже установленного Postgres):
 

@@ -1,0 +1,11 @@
+.env
+.git/
+.gitignore
+.venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+docs/
+task_history/
+tests/
+bot.log

@@ -11,7 +11,13 @@ Run from the case directory with the venv and .env loaded:
 
 import asyncio
 import logging
+import sys
+from pathlib import Path
 from typing import Any
+
+# Make the documented run line work from the case directory:
+# `python scripts/e2e_smoke.py` (script dir, not repo root, is on sys.path)
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
